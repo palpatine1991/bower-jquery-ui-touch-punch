@@ -1,8 +1,9 @@
 /*!
- * jQuery UI Touch Punch 0.2.2
+ * jQuery UI Touch Punch 0.2.3.1w
  *
- * Copyright 2011, Dave Furfero
+ * Copyright 2011–2014, Dave Furfero
  * Dual licensed under the MIT or GPL Version 2 licenses.
+ * Rockwell Edition - by Vojtech Sipek
  *
  * Depends:
  *  jquery.ui.widget.js
@@ -19,15 +20,18 @@
   }
 
   var mouseProto = $.ui.mouse.prototype,
-    _mouseInit = mouseProto._mouseInit,
-    touchHandled;
+      _mouseInit = mouseProto._mouseInit,
+      _mouseDestroy = mouseProto._mouseDestroy,
+      startX, startY,
+      touchHandled,
+      touchMoved;
 
   /**
    * Simulate a mouse event based on a corresponding touch event
    * @param {Object} event A touch event
    * @param {String} simulatedType The corresponding mouse event
    */
-  function simulateMouseEvent(event, simulatedType) {
+  function simulateMouseEvent (event, simulatedType) {
 
     // Ignore multi-touch events
     if (event.originalEvent.touches.length > 1) {
@@ -37,25 +41,25 @@
     event.preventDefault();
 
     var touch = event.originalEvent.changedTouches[0],
-      simulatedEvent = document.createEvent('MouseEvents');
-
+        simulatedEvent = document.createEvent('MouseEvents');
+    
     // Initialize the simulated mouse event using the touch event's coordinates
     simulatedEvent.initMouseEvent(
-      simulatedType, // type
-      true, // bubbles                    
-      true, // cancelable                 
-      window, // view                       
-      1, // detail                     
-      touch.screenX, // screenX                    
-      touch.screenY, // screenY                    
-      touch.clientX, // clientX                    
-      touch.clientY, // clientY                    
-      false, // ctrlKey                    
-      false, // altKey                     
-      false, // shiftKey                   
-      false, // metaKey                    
-      0, // button                     
-      null // relatedTarget              
+      simulatedType,    // type
+      true,             // bubbles                    
+      true,             // cancelable                 
+      window,           // view                       
+      1,                // detail                     
+      touch.screenX,    // screenX                    
+      touch.screenY,    // screenY                    
+      touch.clientX,    // clientX                    
+      touch.clientY,    // clientY                    
+      false,            // ctrlKey                    
+      false,            // altKey                     
+      false,            // shiftKey                   
+      false,            // metaKey                    
+      0,                // button                     
+      null              // relatedTarget              
     );
 
     // Dispatch the simulated event to the target element
@@ -79,7 +83,11 @@
     touchHandled = true;
 
     // Track movement to determine if interaction was a click
-    self._touchMoved = false;
+    touchMoved = false;
+
+    // Track starting event
+    startX = event.originalEvent.touches[0].screenX;
+    startY = event.originalEvent.touches[0].screenY;
 
     // Simulate the mouseover event
     simulateMouseEvent(event, 'mouseover');
@@ -102,8 +110,17 @@
       return;
     }
 
+    // Ignore event if no change in position from starting event
+    var endX = event.originalEvent.touches[0].screenX,
+        endY = event.originalEvent.touches[0].screenY;
+
+    if( startX >= endX-2 && startX <= endX+2 && startY >= endY-2 && startY <= endY+2) {
+      touchMoved = false;
+      return;
+    }
+
     // Interaction was not a click
-    this._touchMoved = true;
+    touchMoved = true;
 
     // Simulate the mousemove event
     simulateMouseEvent(event, 'mousemove');
@@ -127,7 +144,7 @@
     simulateMouseEvent(event, 'mouseout');
 
     // If the touch interaction did not move, it should trigger a click
-    if (!this._touchMoved) {
+    if (!touchMoved) {
 
       // Simulate the click event
       simulateMouseEvent(event, 'click');
@@ -144,17 +161,36 @@
    * original mouse event handling methods.
    */
   mouseProto._mouseInit = function () {
-
+    
     var self = this;
 
     // Delegate the touch handlers to the widget's element
-    self.element
-      .bind('touchstart', $.proxy(self, '_touchStart'))
-      .bind('touchmove', $.proxy(self, '_touchMove'))
-      .bind('touchend', $.proxy(self, '_touchEnd'));
+    self.element.bind({
+      touchstart: $.proxy(self, '_touchStart'),
+      touchmove: $.proxy(self, '_touchMove'),
+      touchend: $.proxy(self, '_touchEnd')
+    });
 
     // Call the original $.ui.mouse init method
     _mouseInit.call(self);
+  };
+
+  /**
+   * Remove the touch event handlers
+   */
+  mouseProto._mouseDestroy = function () {
+    
+    var self = this;
+
+    // Delegate the touch handlers to the widget's element
+    self.element.unbind({
+      touchstart: $.proxy(self, '_touchStart'),
+      touchmove: $.proxy(self, '_touchMove'),
+      touchend: $.proxy(self, '_touchEnd')
+    });
+
+    // Call the original $.ui.mouse destroy method
+    _mouseDestroy.call(self);
   };
 
 })(jQuery);
